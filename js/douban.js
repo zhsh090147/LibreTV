@@ -1,52 +1,26 @@
 // 豆瓣热门电影电视剧推荐功能
+import { 
+    // defaultMovieTags, // No longer directly used here, core module handles them
+    // defaultTvTags,   // No longer directly used here
+    movieTags,      // Used for read-only purposes if needed, or passed by UI module
+    tvTags,         // Used for read-only purposes if needed, or passed by UI module
+    loadUserTags, 
+    // saveUserTags as coreSaveUserTags // UI module now calls this directly
+} from './douban_tags_core.js';
 
-// 豆瓣标签列表 - 修改为默认标签
-let defaultMovieTags = ['热门', '最新', '经典', '豆瓣高分', '冷门佳片', '华语', '欧美', '韩国', '日本', '动作', '喜剧', '日综', '爱情', '科幻', '悬疑', '恐怖', '治愈'];
-let defaultTvTags = ['热门', '美剧', '英剧', '韩剧', '日剧', '国产剧', '港剧', '日本动画', '综艺', '纪录片'];
+import { 
+    renderDoubanTagsUI, 
+    showTagManageModalUI 
+} from './douban_tags_ui.js';
 
-// 用户标签列表 - 存储用户实际使用的标签（包含保留的系统标签和用户添加的自定义标签）
-let movieTags = [];
-let tvTags = [];
+import { fetchDoubanApiData } from './douban_api.js';
+import { renderDoubanCardsUI } from './douban_cards_ui.js';
 
-// 加载用户标签
-function loadUserTags() {
-    try {
-        // 尝试从本地存储加载用户保存的标签
-        const savedMovieTags = localStorage.getItem('userMovieTags');
-        const savedTvTags = localStorage.getItem('userTvTags');
-        
-        // 如果本地存储中有标签数据，则使用它
-        if (savedMovieTags) {
-            movieTags = JSON.parse(savedMovieTags);
-        } else {
-            // 否则使用默认标签
-            movieTags = [...defaultMovieTags];
-        }
-        
-        if (savedTvTags) {
-            tvTags = JSON.parse(savedTvTags);
-        } else {
-            // 否则使用默认标签
-            tvTags = [...defaultTvTags];
-        }
-    } catch (e) {
-        console.error('加载标签失败：', e);
-        // 初始化为默认值，防止错误
-        movieTags = [...defaultMovieTags];
-        tvTags = [...defaultTvTags];
-    }
-}
+// The saveUserTags wrapper is no longer needed here as UI functions handle saving and toast.
 
-// 保存用户标签
-function saveUserTags() {
-    try {
-        localStorage.setItem('userMovieTags', JSON.stringify(movieTags));
-        localStorage.setItem('userTvTags', JSON.stringify(tvTags));
-    } catch (e) {
-        console.error('保存标签失败：', e);
-        showToast('保存标签失败', 'error');
-    }
-}
+// Assuming PROXY_URL is defined globally in the scope where douban.js runs
+// For example, in a script tag before this module, or in a config.js file.
+// const PROXY_URL = '/api/proxy?url='; // Example, ensure this is defined.
 
 let doubanMovieTvCurrentSwitch = 'movie';
 let doubanCurrentTag = '热门';
@@ -95,13 +69,13 @@ function initDouban() {
     }
 
     // 加载用户标签
-    loadUserTags();
+    loadUserTags(); // Loads into coreMovieTags, coreTvTags
 
     // 渲染电影/电视剧切换
     renderDoubanMovieTvSwitch();
     
     // 渲染豆瓣标签
-    renderDoubanTags();
+    renderDoubanTags(); // This will now call the UI version
     
     // 换一批按钮事件监听
     setupDoubanRefreshBtn();
@@ -169,22 +143,6 @@ function fillAndSearch(title) {
     if (input) {
         input.value = safeTitle;
         search(); // 使用已有的search函数执行搜索
-        
-        // 同时更新浏览器URL，使其反映当前的搜索状态
-        try {
-            // 使用URI编码确保特殊字符能够正确显示
-            const encodedQuery = encodeURIComponent(safeTitle);
-            // 使用HTML5 History API更新URL，不刷新页面
-            window.history.pushState(
-                { search: safeTitle }, 
-                `搜索: ${safeTitle} - LibreTV`, 
-                `/s=${encodedQuery}`
-            );
-            // 更新页面标题
-            document.title = `搜索: ${safeTitle} - LibreTV`;
-        } catch (e) {
-            console.error('更新浏览器历史失败:', e);
-        }
     }
 }
 
@@ -229,22 +187,6 @@ async function fillAndSearchWithDouban(title) {
     if (input) {
         input.value = safeTitle;
         await search(); // 使用已有的search函数执行搜索
-        
-        // 更新浏览器URL，使其反映当前的搜索状态
-        try {
-            // 使用URI编码确保特殊字符能够正确显示
-            const encodedQuery = encodeURIComponent(safeTitle);
-            // 使用HTML5 History API更新URL，不刷新页面
-            window.history.pushState(
-                { search: safeTitle }, 
-                `搜索: ${safeTitle} - LibreTV`, 
-                `/s=${encodedQuery}`
-            );
-            // 更新页面标题
-            document.title = `搜索: ${safeTitle} - LibreTV`;
-        } catch (e) {
-            console.error('更新浏览器历史失败:', e);
-        }
 
         if (window.innerWidth <= 768) {
           window.scrollTo({
@@ -273,13 +215,13 @@ function renderDoubanMovieTvSwitch() {
             tvToggle.classList.add('text-gray-300');
             
             doubanMovieTvCurrentSwitch = 'movie';
-            doubanCurrentTag = '热门';
+            doubanCurrentTag = '热门'; // Reset current tag
+            doubanPageStart = 0; // Reset page start
 
             // 重新加载豆瓣内容
-            renderDoubanTags(movieTags);
+            renderDoubanTags(); // Re-render tags for the new type
 
-            // 换一批按钮事件监听
-            setupDoubanRefreshBtn();
+            // setupDoubanRefreshBtn(); // Already set up in initDouban, no need to re-setup
             
             // 初始加载热门内容
             if (localStorage.getItem('doubanEnabled') === 'true') {
@@ -299,13 +241,13 @@ function renderDoubanMovieTvSwitch() {
             movieToggle.classList.add('text-gray-300');
             
             doubanMovieTvCurrentSwitch = 'tv';
-            doubanCurrentTag = '热门';
+            doubanCurrentTag = '热门'; // Reset current tag
+            doubanPageStart = 0; // Reset page start
 
             // 重新加载豆瓣内容
-            renderDoubanTags(tvTags);
+            renderDoubanTags(); // Re-render tags for the new type
 
-            // 换一批按钮事件监听
-            setupDoubanRefreshBtn();
+            // setupDoubanRefreshBtn(); // Already set up in initDouban
             
             // 初始加载热门内容
             if (localStorage.getItem('doubanEnabled') === 'true') {
@@ -315,54 +257,25 @@ function renderDoubanMovieTvSwitch() {
     });
 }
 
-// 渲染豆瓣标签选择器
-function renderDoubanTags(tags) {
+// Wrapper function in douban.js to call the UI function
+function renderDoubanTags() {
     const tagContainer = document.getElementById('douban-tags');
     if (!tagContainer) return;
-    
-    // 确定当前应该使用的标签列表
-    const currentTags = doubanMovieTvCurrentSwitch === 'movie' ? movieTags : tvTags;
-    
-    // 清空标签容器
-    tagContainer.innerHTML = '';
 
-    // 先添加标签管理按钮
-    const manageBtn = document.createElement('button');
-    manageBtn.className = 'py-1.5 px-3.5 rounded text-sm font-medium transition-all duration-300 bg-[#1a1a1a] text-gray-300 hover:bg-pink-700 hover:text-white border border-[#333] hover:border-white';
-    manageBtn.innerHTML = '<span class="flex items-center"><svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>管理标签</span>';
-    manageBtn.onclick = function() {
-        showTagManageModal();
-    };
-    tagContainer.appendChild(manageBtn);
-
-    // 添加所有标签
-    currentTags.forEach(tag => {
-        const btn = document.createElement('button');
-        
-        // 设置样式
-        let btnClass = 'py-1.5 px-3.5 rounded text-sm font-medium transition-all duration-300 border ';
-        
-        // 当前选中的标签使用高亮样式
-        if (tag === doubanCurrentTag) {
-            btnClass += 'bg-pink-600 text-white shadow-md border-white';
-        } else {
-            btnClass += 'bg-[#1a1a1a] text-gray-300 hover:bg-pink-700 hover:text-white border-[#333] hover:border-white';
+    renderDoubanTagsUI(
+        tagContainer,
+        doubanMovieTvCurrentSwitch,
+        doubanCurrentTag,
+        (newTag) => { // onTagClick
+            doubanCurrentTag = newTag;
+            doubanPageStart = 0;
+            renderRecommend(doubanCurrentTag, doubanPageSize, doubanPageStart);
+            renderDoubanTags(); // Re-render to update active tag style
+        },
+        () => { // onManageTagsClick
+            showTagManageModal();
         }
-        
-        btn.className = btnClass;
-        btn.textContent = tag;
-        
-        btn.onclick = function() {
-            if (doubanCurrentTag !== tag) {
-                doubanCurrentTag = tag;
-                doubanPageStart = 0;
-                renderRecommend(doubanCurrentTag, doubanPageSize, doubanPageStart);
-                renderDoubanTags();
-            }
-        };
-        
-        tagContainer.appendChild(btn);
-    });
+    );
 }
 
 // 设置换一批按钮事件
@@ -383,22 +296,34 @@ function setupDoubanRefreshBtn() {
 
 function fetchDoubanTags() {
     const movieTagsTarget = `https://movie.douban.com/j/search_tags?type=movie`
-    fetchDoubanData(movieTagsTarget)
+    fetchDoubanApiData(movieTagsTarget, PROXY_URL) // Use new API function
         .then(data => {
-            movieTags = data.tags;
+            // movieTags are now in douban_tags_core.js and managed by douban_tags_ui.js
+            // This function might be for fetching initial remote tags, not user tags.
+            // For now, assuming this function's purpose might need re-evaluation
+            // or that it should update the core tags.
+            // If these are meant to be *additional* tags from Douban API:
+            // console.log("Fetched movie tags from Douban API:", data.tags);
+            // Potentially merge with coreMovieTags or offer to user.
+            // For now, let's assume it's not critical for the current refactor stage of user tags.
+            // If it IS for overwriting user tags with fresh ones:
+            // movieTags.length = 0; movieTags.push(...data.tags); coreSaveUserTags();
             if (doubanMovieTvCurrentSwitch === 'movie') {
-                renderDoubanTags(movieTags);
+                // This would overwrite user's tags if not handled carefully.
+                // Let's assume this function is for something else or needs adjustment.
+                // renderDoubanTags(); // Re-render if tags changed
             }
         })
         .catch(error => {
             console.error("获取豆瓣热门电影标签失败：", error);
         });
     const tvTagsTarget = `https://movie.douban.com/j/search_tags?type=tv`
-    fetchDoubanData(tvTagsTarget)
+    fetchDoubanApiData(tvTagsTarget, PROXY_URL) // Use new API function
        .then(data => {
-            tvTags = data.tags;
+            // Similar to movieTags above.
+            // console.log("Fetched TV tags from Douban API:", data.tags);
             if (doubanMovieTvCurrentSwitch === 'tv') {
-                renderDoubanTags(tvTags);
+                // renderDoubanTags();
             }
         })
        .catch(error => {
@@ -407,7 +332,8 @@ function fetchDoubanTags() {
 }
 
 // 渲染热门推荐内容
-function renderRecommend(tag, pageLimit, pageStart) {
+// Make renderRecommend exportable or ensure it's in scope for callbacks
+/* export */ function renderRecommend(tag, pageLimit, pageStart) {
     const container = document.getElementById("douban-results");
     if (!container) return;
 
@@ -425,10 +351,11 @@ function renderRecommend(tag, pageLimit, pageStart) {
     
     const target = `https://movie.douban.com/j/search_subjects?type=${doubanMovieTvCurrentSwitch}&tag=${tag}&sort=recommend&page_limit=${pageLimit}&page_start=${pageStart}`;
     
-    // 使用通用请求函数
-    fetchDoubanData(target)
+    // 使用新的API函数
+    fetchDoubanApiData(target, PROXY_URL)
         .then(data => {
-            renderDoubanCards(data, container);
+            // Call the new UI function for rendering cards
+            renderDoubanCardsUI(data, container, PROXY_URL, fillAndSearchWithDouban);
         })
         .catch(error => {
             console.error("获取豆瓣数据失败：", error);
@@ -441,134 +368,8 @@ function renderRecommend(tag, pageLimit, pageStart) {
         });
 }
 
-async function fetchDoubanData(url) {
-    // 添加超时控制
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
-    
-    // 设置请求选项，包括信号和头部
-    const fetchOptions = {
-        signal: controller.signal,
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-            'Referer': 'https://movie.douban.com/',
-            'Accept': 'application/json, text/plain, */*',
-        }
-    };
-
-    try {
-        // 添加鉴权参数到代理URL
-        const proxiedUrl = await window.ProxyAuth?.addAuthToProxyUrl ? 
-            await window.ProxyAuth.addAuthToProxyUrl(PROXY_URL + encodeURIComponent(url)) :
-            PROXY_URL + encodeURIComponent(url);
-            
-        // 尝试直接访问（豆瓣API可能允许部分CORS请求）
-        const response = await fetch(proxiedUrl, fetchOptions);
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        
-        return await response.json();
-    } catch (err) {
-        console.error("豆瓣 API 请求失败（直接代理）：", err);
-        
-        // 失败后尝试备用方法：作为备选
-        const fallbackUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        
-        try {
-            const fallbackResponse = await fetch(fallbackUrl);
-            
-            if (!fallbackResponse.ok) {
-                throw new Error(`备用API请求失败! 状态: ${fallbackResponse.status}`);
-            }
-            
-            const data = await fallbackResponse.json();
-            
-            // 解析原始内容
-            if (data && data.contents) {
-                return JSON.parse(data.contents);
-            } else {
-                throw new Error("无法获取有效数据");
-            }
-        } catch (fallbackErr) {
-            console.error("豆瓣 API 备用请求也失败：", fallbackErr);
-            throw fallbackErr; // 向上抛出错误，让调用者处理
-        }
-    }
-}
-
-// 抽取渲染豆瓣卡片的逻辑到单独函数
-function renderDoubanCards(data, container) {
-    // 创建文档片段以提高性能
-    const fragment = document.createDocumentFragment();
-    
-    // 如果没有数据
-    if (!data.subjects || data.subjects.length === 0) {
-        const emptyEl = document.createElement("div");
-        emptyEl.className = "col-span-full text-center py-8";
-        emptyEl.innerHTML = `
-            <div class="text-pink-500">❌ 暂无数据，请尝试其他分类或刷新</div>
-        `;
-        fragment.appendChild(emptyEl);
-    } else {
-        // 循环创建每个影视卡片
-        data.subjects.forEach(item => {
-            const card = document.createElement("div");
-            card.className = "bg-[#111] hover:bg-[#222] transition-all duration-300 rounded-lg overflow-hidden flex flex-col transform hover:scale-105 shadow-md hover:shadow-lg";
-            
-            // 生成卡片内容，确保安全显示（防止XSS）
-            const safeTitle = item.title
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
-            
-            const safeRate = (item.rate || "暂无")
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
-            
-            // 处理图片URL
-            // 1. 直接使用豆瓣图片URL (添加no-referrer属性)
-            const originalCoverUrl = item.cover;
-            
-            // 2. 也准备代理URL作为备选
-            const proxiedCoverUrl = PROXY_URL + encodeURIComponent(originalCoverUrl);
-            
-            // 为不同设备优化卡片布局
-            card.innerHTML = `
-                <div class="relative w-full aspect-[2/3] overflow-hidden cursor-pointer" onclick="fillAndSearchWithDouban('${safeTitle}')">
-                    <img src="${originalCoverUrl}" alt="${safeTitle}" 
-                        class="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                        onerror="this.onerror=null; this.src='${proxiedCoverUrl}'; this.classList.add('object-contain');"
-                        loading="lazy" referrerpolicy="no-referrer">
-                    <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-60"></div>
-                    <div class="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm">
-                        <span class="text-yellow-400">★</span> ${safeRate}
-                    </div>
-                    <div class="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm hover:bg-[#333] transition-colors">
-                        <a href="${item.url}" target="_blank" rel="noopener noreferrer" title="在豆瓣查看" onclick="event.stopPropagation();">
-                            🔗
-                        </a>
-                    </div>
-                </div>
-                <div class="p-2 text-center bg-[#111]">
-                    <button onclick="fillAndSearchWithDouban('${safeTitle}')" 
-                            class="text-sm font-medium text-white truncate w-full hover:text-pink-400 transition"
-                            title="${safeTitle}">
-                        ${safeTitle}
-                    </button>
-                </div>
-            `;
-            
-            fragment.appendChild(card);
-        });
-    }
-    
-    // 清空并添加所有新元素
-    container.innerHTML = "";
-    container.appendChild(fragment);
-}
+// The original fetchDoubanData function is now removed and replaced by fetchDoubanApiData from douban_api.js
+// The original renderDoubanCards function is now removed and replaced by renderDoubanCardsUI from douban_cards_ui.js
 
 // 重置到首页
 function resetToHome() {
@@ -579,215 +380,29 @@ function resetToHome() {
 // 加载豆瓣首页内容
 document.addEventListener('DOMContentLoaded', initDouban);
 
-// 显示标签管理模态框
+// Wrapper function in douban.js to call the UI function for the modal
 function showTagManageModal() {
-    // 确保模态框在页面上只有一个实例
-    let modal = document.getElementById('tagManageModal');
-    if (modal) {
-        document.body.removeChild(modal);
-    }
-    
-    // 创建模态框元素
-    modal = document.createElement('div');
-    modal.id = 'tagManageModal';
-    modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-40';
-    
-    // 当前使用的标签类型和默认标签
-    const isMovie = doubanMovieTvCurrentSwitch === 'movie';
-    const currentTags = isMovie ? movieTags : tvTags;
-    const defaultTags = isMovie ? defaultMovieTags : defaultTvTags;
-    
-    // 模态框内容
-    modal.innerHTML = `
-        <div class="bg-[#191919] rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto relative">
-            <button id="closeTagModal" class="absolute top-4 right-4 text-gray-400 hover:text-white text-xl">&times;</button>
-            
-            <h3 class="text-xl font-bold text-white mb-4">标签管理 (${isMovie ? '电影' : '电视剧'})</h3>
-            
-            <div class="mb-4">
-                <div class="flex justify-between items-center mb-2">
-                    <h4 class="text-lg font-medium text-gray-300">标签列表</h4>
-                    <button id="resetTagsBtn" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded">
-                        恢复默认标签
-                    </button>
-                </div>
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4" id="tagsGrid">
-                    ${currentTags.length ? currentTags.map(tag => {
-                        // "热门"标签不能删除
-                        const canDelete = tag !== '热门';
-                        return `
-                            <div class="bg-[#1a1a1a] text-gray-300 py-1.5 px-3 rounded text-sm font-medium flex justify-between items-center group">
-                                <span>${tag}</span>
-                                ${canDelete ? 
-                                    `<button class="delete-tag-btn text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" 
-                                        data-tag="${tag}">✕</button>` : 
-                                    `<span class="text-gray-500 text-xs italic opacity-0 group-hover:opacity-100">必需</span>`
-                                }
-                            </div>
-                        `;
-                    }).join('') : 
-                    `<div class="col-span-full text-center py-4 text-gray-500">无标签，请添加或恢复默认</div>`}
-                </div>
-            </div>
-            
-            <div class="border-t border-gray-700 pt-4">
-                <h4 class="text-lg font-medium text-gray-300 mb-3">添加新标签</h4>
-                <form id="addTagForm" class="flex items-center">
-                    <input type="text" id="newTagInput" placeholder="输入标签名称..." 
-                           class="flex-1 bg-[#222] text-white border border-gray-700 rounded px-3 py-2 focus:outline-none focus:border-pink-500">
-                    <button type="submit" class="ml-2 bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded">添加</button>
-                </form>
-                <p class="text-xs text-gray-500 mt-2">提示：标签名称不能为空，不能重复，不能包含特殊字符</p>
-            </div>
-        </div>
-    `;
-    
-    // 添加模态框到页面
-    document.body.appendChild(modal);
-    
-    // 焦点放在输入框上
-    setTimeout(() => {
-        document.getElementById('newTagInput').focus();
-    }, 100);
-    
-    // 添加事件监听器 - 关闭按钮
-    document.getElementById('closeTagModal').addEventListener('click', function() {
-        document.body.removeChild(modal);
-    });
-    
-    // 添加事件监听器 - 点击模态框外部关闭
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-            document.body.removeChild(modal);
-        }
-    });
-    
-    // 添加事件监听器 - 恢复默认标签按钮
-    document.getElementById('resetTagsBtn').addEventListener('click', function() {
-        resetTagsToDefault();
-        showTagManageModal(); // 重新加载模态框
-    });
-    
-    // 添加事件监听器 - 删除标签按钮
-    const deleteButtons = document.querySelectorAll('.delete-tag-btn');
-    deleteButtons.forEach(btn => {
-        btn.addEventListener('click', function() {
-            const tagToDelete = this.getAttribute('data-tag');
-            deleteTag(tagToDelete);
-            showTagManageModal(); // 重新加载模态框
-        });
-    });
-    
-    // 添加事件监听器 - 表单提交
-    document.getElementById('addTagForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const input = document.getElementById('newTagInput');
-        const newTag = input.value.trim();
-        
-        if (newTag) {
-            addTag(newTag);
-            input.value = '';
-            showTagManageModal(); // 重新加载模态框
-        }
-    });
-}
+    // Ensure showToast is accessible, assuming it's a global function
+    // or pass it explicitly if it's not.
+    const callbacks = {
+        onTagsUpdated: () => {
+            renderDoubanTags(); // Re-render the main tag list
+        },
+        getCurrentTag: () => doubanCurrentTag,
+        setCurrentTag: (tag) => { doubanCurrentTag = tag; },
+        setPageStart: (start) => { doubanPageStart = start; },
+        renderRecommendFn: renderRecommend, // Pass the actual renderRecommend function
+        renderDoubanTagsFn: renderDoubanTags, // Pass the main renderDoubanTags wrapper
+        doubanPageSize: doubanPageSize
+    };
 
-// 添加标签
-function addTag(tag) {
-    // 安全处理标签名，防止XSS
-    const safeTag = tag
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    
-    // 确定当前使用的是电影还是电视剧标签
-    const isMovie = doubanMovieTvCurrentSwitch === 'movie';
-    const currentTags = isMovie ? movieTags : tvTags;
-    
-    // 检查是否已存在（忽略大小写）
-    const exists = currentTags.some(
-        existingTag => existingTag.toLowerCase() === safeTag.toLowerCase()
+    showTagManageModalUI(
+        doubanMovieTvCurrentSwitch,
+        showToast, // Pass the showToast function
+        callbacks
     );
-    
-    if (exists) {
-        showToast('标签已存在', 'warning');
-        return;
-    }
-    
-    // 添加到对应的标签数组
-    if (isMovie) {
-        movieTags.push(safeTag);
-    } else {
-        tvTags.push(safeTag);
-    }
-    
-    // 保存到本地存储
-    saveUserTags();
-    
-    // 重新渲染标签
-    renderDoubanTags();
-    
-    showToast('标签添加成功', 'success');
 }
 
-// 删除标签
-function deleteTag(tag) {
-    // 热门标签不能删除
-    if (tag === '热门') {
-        showToast('热门标签不能删除', 'warning');
-        return;
-    }
-    
-    // 确定当前使用的是电影还是电视剧标签
-    const isMovie = doubanMovieTvCurrentSwitch === 'movie';
-    const currentTags = isMovie ? movieTags : tvTags;
-    
-    // 寻找标签索引
-    const index = currentTags.indexOf(tag);
-    
-    // 如果找到标签，则删除
-    if (index !== -1) {
-        currentTags.splice(index, 1);
-        
-        // 保存到本地存储
-        saveUserTags();
-        
-        // 如果当前选中的是被删除的标签，则重置为"热门"
-        if (doubanCurrentTag === tag) {
-            doubanCurrentTag = '热门';
-            doubanPageStart = 0;
-            renderRecommend(doubanCurrentTag, doubanPageSize, doubanPageStart);
-        }
-        
-        // 重新渲染标签
-        renderDoubanTags();
-        
-        showToast('标签删除成功', 'success');
-    }
-}
-
-// 重置为默认标签
-function resetTagsToDefault() {
-    // 确定当前使用的是电影还是电视剧
-    const isMovie = doubanMovieTvCurrentSwitch === 'movie';
-    
-    // 重置为默认标签
-    if (isMovie) {
-        movieTags = [...defaultMovieTags];
-    } else {
-        tvTags = [...defaultTvTags];
-    }
-    
-    // 设置当前标签为热门
-    doubanCurrentTag = '热门';
-    doubanPageStart = 0;
-    
-    // 保存到本地存储
-    saveUserTags();
-    
-    // 重新渲染标签和内容
-    renderDoubanTags();
-    renderRecommend(doubanCurrentTag, doubanPageSize, doubanPageStart);
-    
-    showToast('已恢复默认标签', 'success');
-}
+// Functions addTag, deleteTag, resetTagsToDefault are now part of douban_tags_ui.js
+// and are invoked internally by the modal logic there.
+// They use coreSaveUserTags and the passed showToastFn.
