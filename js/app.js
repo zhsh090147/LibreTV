@@ -776,6 +776,15 @@ async function search() {
             });
         }
 
+        // 统计每个影片在多少个不同的源中出现（用于卡片显示可用源数量）
+        const titleSourceMap = {};
+        allResults.forEach(item => {
+            const title = (item.vod_name || '').toString().trim().toLowerCase();
+            if (!title) return;
+            if (!titleSourceMap[title]) titleSourceMap[title] = new Set();
+            titleSourceMap[title].add(item.source_code || item.source_name || 'unknown');
+        });
+
         // 添加XSS保护，使用textContent和属性转义
         const safeResults = allResults.map(item => {
             const safeId = item.vod_id ? item.vod_id.toString().replace(/[^\w-]/g, '') : '';
@@ -785,6 +794,11 @@ async function search() {
                 .replace(/"/g, '&quot;');
             const sourceInfo = item.source_name ? 
                 `<span class="bg-[#222] text-xs px-1.5 py-0.5 rounded-full">${item.source_name}</span>` : '';
+            // 可用源数量徽章：同一影片在几个源中搜到
+            const titleKey = (item.vod_name || '').toString().trim().toLowerCase();
+            const sourceCount = titleSourceMap[titleKey] ? titleSourceMap[titleKey].size : 1;
+            const countBadge = sourceCount > 1 ?
+                `<span class="text-xs py-0.5 px-1.5 rounded-full bg-green-500 bg-opacity-20 text-green-300" title="${sourceCount} 个源可播放">${sourceCount} 源</span>` : '';
             const sourceCode = item.source_code || '';
             
             // 添加API URL属性，用于详情获取
@@ -827,7 +841,7 @@ async function search() {
                             </div>
                             
                             <div class="flex justify-between items-center mt-1 pt-1 border-t border-gray-800">
-                                ${sourceInfo ? `<div>${sourceInfo}</div>` : '<div></div>'}
+                                <div class="flex flex-wrap items-center gap-1">${sourceInfo}${countBadge}</div>
                                 <!-- 接口名称过长会被挤变形
                                 <div>
                                     <span class="text-gray-500 flex items-center hover:text-blue-400 transition-colors">
