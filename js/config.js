@@ -106,6 +106,69 @@ const API_SITES = {
         name: 'iKun资源'
     },
 
+    /* ===== 2026-11-26 新增：实测可用源（Apple CMS V10 接口） ===== */
+    ffzyapi: {
+        api: 'https://api.ffzyapi.com/api.php/provide/vod',
+        name: '非凡影视'
+    },
+    maotai: {
+        api: 'https://caiji.maotaizy.cc/api.php/provide/vod',
+        name: '茅台资源'
+    },
+    jszyapi: {
+        api: 'https://jszyapi.com/api.php/provide/vod',
+        name: '极速资源API'
+    },
+    jszyjson: {
+        api: 'https://jszyapi.com/api.php/provide/vod/at/json',
+        name: '极速资源JSON'
+    },
+    mdzyapi: {
+        api: 'https://www.mdzyapi.com/api.php/provide/vod',
+        name: '魔都资源'
+    },
+    zuidapi: {
+        api: 'https://api.zuidapi.com/api.php/provide/vod',
+        name: '最大资源'
+    },
+    wujinapi: {
+        api: 'https://api.wujinapi.me/api.php/provide/vod',
+        name: '无尽资源'
+    },
+    apibdzy: {
+        api: 'https://api.apibdzy.com/api.php/provide/vod',
+        name: '百度资源'
+    },
+    hongniu: {
+        api: 'https://www.hongniuzy2.com/api.php/provide/vod',
+        name: '红牛资源'
+    },
+    iqiyizy: {
+        api: 'https://iqiyizyapi.com/api.php/provide/vod',
+        name: '爱奇艺资源'
+    },
+    maoyan: {
+        api: 'https://api.maoyanapi.top/api.php/provide/vod',
+        name: '猫眼资源'
+    },
+    zy360zz: {
+        api: 'https://360zyzz.com/api.php/provide/vod',
+        name: '360资源'
+    },
+    moduapi: {
+        api: 'https://caiji.moduapi.cc/api.php/provide/vod',
+        name: '魔都动漫'
+    },
+    ukuapi: {
+        api: 'https://api.ukuapi88.com/api.php/provide/vod',
+        name: '优酷资源'
+    },
+    guangsu: {
+        api: 'https://api.guangsuapi.com/api.php/provide/vod',
+        name: '光速资源'
+    }
+};
+
 // 定义合并方法
 function extendAPISites(newSites) {
     Object.assign(API_SITES, newSites);
