@@ -1,6 +1,38 @@
+// ===== 搜索结果相关性过滤 =====
+// 部分采集站（如 zuidapi）搜索时会返回大量与关键词无关的内容，需按标题过滤
+function _normText(str) {
+    return (str || '').toString().toLowerCase()
+        .replace(/[\s\·\•\-\—\_\.\,\，\：\:\!\？\?\!\（\）\(\)\[\]\【\】]/g, '');
+}
+function isRelevant(vodName, query) {
+    const title = _normText(vodName);
+    const q = _normText(query);
+    if (!title || !q) return false;
+    // 完整命中
+    if (title.includes(q)) return true;
+    // 中文：按 2 字切分片段，要求命中至少一半片段（防止"哪吒闹海"只命中"闹"这种单字）
+    const cjk = /[\u4e00-\u9fa5]/;
+    if (cjk.test(q)) {
+        if (q.length <= 1) return title.includes(q);
+        let grams = [];
+        for (let i = 0; i <= q.length - 2; i++) grams.push(q.slice(i, i + 2));
+        const hit = grams.filter(g => title.includes(g)).length;
+        return hit >= Math.ceil(grams.length * 0.5);
+    }
+    // 西文/数字：按词匹配
+    const words = (query || '').toLowerCase().split(/[\s]+/).filter(w => w.length >= 2);
+    return words.length === 0 ? title.includes(q) : words.every(w => title.includes(w.toLowerCase()));
+}
+function filterByRelevance(items, query) {
+    if (!query || !Array.isArray(items)) return items || [];
+    const filtered = items.filter(item => isRelevant(item.vod_name || '', query));
+    // 若整源无一条命中，宁可丢弃该源，也不返回无关内容
+    return filtered;
+}
+
 // 全局变量
 // 默认选中实测可用的源（旧默认源 tyyszy/xiaomaomi/dyttzy/ruyi 多数已失效）
-const DEFAULT_APIS = ["bfzy","ffzyapi","mdzyapi","zuidapi","apibdzy","hongniu","iqiyizy","maoyan","zy360zz","moduapi","ukuapi","ffzy"];
+const DEFAULT_APIS = ["bfzy","ffzyapi","mdzyapi","apibdzy","hongniu","iqiyizy","maoyan","zy360zz","moduapi","ukuapi","ffzy"];
 let selectedAPIs = JSON.parse(localStorage.getItem('selectedAPIs') || JSON.stringify(DEFAULT_APIS));
 let customAPIs = JSON.parse(localStorage.getItem('customAPIs') || '[]'); // 存储自定义API列表
 
@@ -669,8 +701,10 @@ async function search() {
                     return [];
                 }
                 
-                // 处理第一页结果
-                const results = data.list.map(item => ({
+                // 处理第一页结果（按标题相关性过滤，剔除无关内容）
+                const relevantList = filterByRelevance(data.list, query);
+                if (relevantList.length === 0) return [];
+                const results = relevantList.map(item => ({
                     ...item,
                     source_name: apiName,
                     source_code: apiId,
@@ -714,8 +748,9 @@ async function search() {
                                 
                                 if (!pageData || !pageData.list || !Array.isArray(pageData.list)) return [];
                                 
-                                // 处理当前页结果
-                                return pageData.list.map(item => ({
+                                // 处理当前页结果（相关性过滤）
+                                const relevantPageList = filterByRelevance(pageData.list, query);
+                                return relevantPageList.map(item => ({
                                     ...item,
                                     source_name: apiName,
                                     source_code: apiId,
