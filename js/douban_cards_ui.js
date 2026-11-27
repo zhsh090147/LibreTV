@@ -40,7 +40,7 @@ export function renderDoubanCardsUI(data, container, proxyUrl, onCardClickCallba
             const originalCoverUrl = item.cover;
             // 豆瓣图片有防盗链(HTTP 418)，必须经本站代理；代理需带密码鉴权
             const authHash = (window.__ENV__ && window.__ENV__.PASSWORD) || '';
-            const authSuffix = authHash ? ('&auth=' + encodeURIComponent(authHash) + '&t=' + Date.now()) : '';
+            const authSuffix = authHash ? ('?auth=' + encodeURIComponent(authHash) + '&t=' + Date.now()) : '';
             const proxiedCoverUrl = proxyUrl + encodeURIComponent(originalCoverUrl) + authSuffix;
             
             card.innerHTML = `
