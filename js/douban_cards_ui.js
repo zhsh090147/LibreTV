@@ -38,13 +38,16 @@ export function renderDoubanCardsUI(data, container, proxyUrl, onCardClickCallba
                 .replace(/'/g, '&#039;');
             
             const originalCoverUrl = item.cover;
-            const proxiedCoverUrl = proxyUrl + encodeURIComponent(originalCoverUrl);
+            // 豆瓣图片有防盗链(HTTP 418)，必须经本站代理；代理需带密码鉴权
+            const authHash = (window.__ENV__ && window.__ENV__.PASSWORD) || '';
+            const authSuffix = authHash ? ('&auth=' + encodeURIComponent(authHash) + '&t=' + Date.now()) : '';
+            const proxiedCoverUrl = proxyUrl + encodeURIComponent(originalCoverUrl) + authSuffix;
             
             card.innerHTML = `
                 <div class="relative w-full aspect-[2/3] overflow-hidden cursor-pointer">
-                    <img src="${originalCoverUrl}" alt="${safeTitle}" 
+                    <img src="${proxiedCoverUrl}" alt="${safeTitle}" 
                         class="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                        onerror="this.onerror=null; this.src='${proxiedCoverUrl}'; this.classList.add('object-contain');"
+                        onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 150%22%3E%3Crect width=%22100%22 height=%22150%22 fill=%22%23111%22/%3E%3C/svg%3E';"
                         loading="lazy" referrerpolicy="no-referrer">
                     <div class="absolute inset-0 bg-gradient-to-t from-black to-transparent opacity-60"></div>
                     <div class="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded-sm">
