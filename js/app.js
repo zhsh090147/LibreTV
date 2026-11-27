@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 默认选中过滤开关
         localStorage.setItem('yellowFilterEnabled', 'true');
+        localStorage.setItem('sportsFilterEnabled', 'true');
         localStorage.setItem(PLAYER_CONFIG.adFilteringStorage, 'true');
         
         // 默认启用豆瓣功能
@@ -53,6 +54,12 @@ document.addEventListener('DOMContentLoaded', function() {
         yellowFilterToggle.checked = localStorage.getItem('yellowFilterEnabled') === 'true';
     }
     
+    // 设置体育赛事过滤开关初始状态（默认开启）
+    const sportsFilterToggle = document.getElementById('sportsFilterToggle');
+    if (sportsFilterToggle) {
+        sportsFilterToggle.checked = localStorage.getItem('sportsFilterEnabled') !== 'false';
+    }
+
     // 设置广告过滤开关初始状态
     const adFilterToggle = document.getElementById('adFilterToggle');
     if (adFilterToggle) {
@@ -538,6 +545,14 @@ function setupEventListeners() {
         });
     }
     
+    // 体育赛事过滤开关事件绑定
+    const sportsFilterToggle = document.getElementById('sportsFilterToggle');
+    if (sportsFilterToggle) {
+        sportsFilterToggle.addEventListener('change', function(e) {
+            localStorage.setItem('sportsFilterEnabled', e.target.checked);
+        });
+    }
+
     // 广告过滤开关事件绑定
     const adFilterToggle = document.getElementById('adFilterToggle');
     if (adFilterToggle) {
@@ -786,6 +801,30 @@ async function search() {
                 const typeName = item.type_name || '';
                 return !banned.some(keyword => typeName.includes(keyword));
             });
+        }
+
+        // 体育赛事过滤：过滤篮球、足球等体育直播赛事（暴风等源常混入）
+        const sportsFilterEnabled = localStorage.getItem('sportsFilterEnabled') !== 'false';
+        if (sportsFilterEnabled) {
+            const sportsKeywords = ['篮球', '足球', 'NBA', 'CBA', '中超', '英超', '西甲', '意甲', '德甲', '欧冠', '世界杯', '体育', '网球', '羽毛球', '乒乓球', '排球', '赛车', 'F1', '拳击', '格斗', 'UFC', 'WWE', '赛事', '常规赛', '季后赛', '总决赛', '小组赛', '联赛'];
+            allResults = allResults.filter(item => {
+                const typeName = (item.type_name || '').toString();
+                const vodName = (item.vod_name || '').toString();
+                const text = typeName + ' ' + vodName;
+                // 仅当分类明确是体育类，或片名以赛事模式开头时才过滤，避免误伤影视剧
+                const isSportsType = sportsKeywords.some(k => typeName.includes(k));
+                const isSportsTitle = /^(NBA|CBA|英超|中超|西甲|意甲|德甲|欧冠|世界杯|中国男篮|男篮|女篮)/i.test(vodName) ||
+                    /(常规赛|季后赛|总决赛|小组赛|俱乐部杯)[:：]/.test(vodName) ||
+                    /[：:][^：:]*\b(VS|vs|对阵)\b/i.test(vodName);
+                if (isSportsType) return false;
+                if (isSportsTitle) return false;
+                return true;
+            });
+        }
+
+        // 更新过滤后的结果计数
+        if (searchResultsCount) {
+            searchResultsCount.textContent = allResults.length;
         }
 
         // 统计每个影片在多少个不同的源中出现（用于卡片显示可用源数量）
@@ -1187,6 +1226,7 @@ async function exportConfig() {
         'selectedAPIs',
         'customAPIs',
         'yellowFilterEnabled',
+        'sportsFilterEnabled',
         'adFilteringEnabled',
         'doubanEnabled',
         'hasInitializedDefaults'

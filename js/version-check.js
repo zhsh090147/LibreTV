@@ -28,12 +28,13 @@ async function fetchVersion(url, errorMessage, options = {}) {
 
 // 版本检查函数
 async function checkForUpdates() {
+    let updateCheckFailed = false;
     try {
-        // 获取当前版本
+        // 获取当前版本（本地文件，必须成功）
         const currentVersion = await fetchVersion('/VERSION.txt', '获取当前版本失败', {
             cache: 'no-store'
         });
-        
+
         // 获取最新版本
         let latestVersion;
         const VERSION_URL = {
@@ -41,14 +42,14 @@ async function checkForUpdates() {
             DIRECT: 'https://raw.githubusercontent.com/LibreSpark/LibreTV/main/VERSION.txt'
         };
         const FETCH_TIMEOUT = 1500;
-        
+
         try {
             // 尝试使用代理URL获取最新版本
             const proxyPromise = fetchVersion(VERSION_URL.PROXY, '代理请求失败');
-            const timeoutPromise = new Promise((_, reject) => 
+            const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('代理请求超时')), FETCH_TIMEOUT)
             );
-            
+
             latestVersion = await Promise.race([proxyPromise, timeoutPromise]);
             console.log('通过代理服务器获取版本成功');
         } catch (error) {
@@ -58,23 +59,27 @@ async function checkForUpdates() {
                 latestVersion = await fetchVersion(VERSION_URL.DIRECT, '获取最新版本失败');
                 console.log('直接请求获取版本成功');
             } catch (directError) {
-                console.error('所有版本检查请求均失败:', directError);
-                throw new Error('无法获取最新版本信息');
+                // 官方 VERSION.txt 可能已下线或网络不通：不再报"检测失败"，
+                // 降级为只显示本地版本，站点功能完全不受影响
+                console.warn('在线版本检查失败，降级为仅显示本地版本:', directError);
+                updateCheckFailed = true;
+                latestVersion = currentVersion;
             }
         }
-        
+
         console.log('当前版本:', currentVersion);
         console.log('最新版本:', latestVersion);
-        
+
         // 清理版本字符串（移除可能的空格或换行符）
         const cleanCurrentVersion = currentVersion.trim();
         const cleanLatestVersion = latestVersion.trim();
-        
+
         // 返回版本信息
         return {
             current: cleanCurrentVersion,
             latest: cleanLatestVersion,
-            hasUpdate: parseInt(cleanLatestVersion) > parseInt(cleanCurrentVersion),
+            hasUpdate: !updateCheckFailed && parseInt(cleanLatestVersion) > parseInt(cleanCurrentVersion),
+            updateCheckFailed: updateCheckFailed,
             currentFormatted: formatVersion(cleanCurrentVersion),
             latestFormatted: formatVersion(cleanLatestVersion)
         };
@@ -86,33 +91,29 @@ async function checkForUpdates() {
 
 // 格式化版本号为可读形式 (yyyyMMddhhmm -> yyyy-MM-dd hh:mm)
 function formatVersion(versionString) {
-    // 检测版本字符串是否有效
     if (!versionString) {
         return '未知版本';
     }
-    
-    // 清理版本字符串（移除可能的空格或换行符）
+
     const cleanedString = versionString.trim();
-    
-    // 格式化标准12位版本号
+
     if (cleanedString.length === 12) {
         const year = cleanedString.substring(0, 4);
         const month = cleanedString.substring(4, 6);
         const day = cleanedString.substring(6, 8);
         const hour = cleanedString.substring(8, 10);
         const minute = cleanedString.substring(10, 12);
-        
         return `${year}-${month}-${day} ${hour}:${minute}`;
     }
-    
+
     return cleanedString;
 }
 
-// 创建错误版本信息元素
+// 创建错误版本信息元素（不再显示橙色"检测失败"）
 function createErrorVersionElement(errorMessage) {
     const errorElement = document.createElement('p');
     errorElement.className = 'text-gray-500 text-sm mt-1 text-center md:text-left';
-    errorElement.innerHTML = `版本: <span class="text-amber-500">检测失败</span>`;
+    errorElement.innerHTML = `版本: <span class="text-gray-500">(本地版本)</span>`;
     errorElement.title = errorMessage;
     return errorElement;
 }
@@ -121,21 +122,15 @@ function createErrorVersionElement(errorMessage) {
 function addVersionInfoToFooter() {
     checkForUpdates().then(result => {
         if (!result) {
-            // 如果版本检测失败，显示错误信息
-            const versionElement = createErrorVersionElement();
-            // 在页脚显示错误元素
-            displayVersionElement(versionElement);
+            displayVersionElement(createErrorVersionElement('无法读取版本信息'));
             return;
         }
-        
-        // 创建版本信息元素
+
         const versionElement = document.createElement('p');
         versionElement.className = 'text-gray-500 text-sm mt-1 text-center md:text-left';
-        
-        // 添加当前版本信息
+
         versionElement.innerHTML = `版本: ${result.currentFormatted}`;
-        
-        // 如果有更新，添加更新提示
+
         if (result.hasUpdate) {
             versionElement.innerHTML += ` <span class="inline-flex items-center bg-red-600 text-white text-xs px-2 py-0.5 rounded-md ml-1 cursor-pointer animate-pulse font-medium">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -143,7 +138,7 @@ function addVersionInfoToFooter() {
                 </svg>
                 发现新版
             </span>`;
-            
+
             setTimeout(() => {
                 const updateBtn = versionElement.querySelector('span');
                 if (updateBtn) {
@@ -152,30 +147,26 @@ function addVersionInfoToFooter() {
                     });
                 }
             }, 100);
+        } else if (result.updateCheckFailed) {
+            // 在线检查失败：仅显示本地版本，避免误报"检测失败"
+            versionElement.innerHTML = `版本: ${result.currentFormatted} <span class="text-gray-500">(本地版本)</span>`;
         } else {
-            // 如果没有更新，显示当前版本为最新版本
             versionElement.innerHTML = `版本: ${result.currentFormatted} <span class="text-green-500">(最新版本)</span>`;
         }
-        
-        // 显示版本元素
+
         displayVersionElement(versionElement);
     }).catch(error => {
         console.error('版本检测出错:', error);
-        // 创建错误版本信息元素并显示
-        const errorElement = createErrorVersionElement(`错误信息: ${error.message}`);
-        displayVersionElement(errorElement);
+        displayVersionElement(createErrorVersionElement(`错误信息: ${error.message}`));
     });
 }
 
 // 在页脚显示版本元素的辅助函数
 function displayVersionElement(element) {
-    // 获取页脚元素
     const footerElement = document.querySelector('.footer p.text-gray-500.text-sm');
     if (footerElement) {
-        // 在原版权信息后插入版本信息
         footerElement.insertAdjacentElement('afterend', element);
     } else {
-        // 如果找不到页脚元素，尝试在页脚区域最后添加
         const footer = document.querySelector('.footer .container');
         if (footer) {
             footer.querySelector('div').appendChild(element);
