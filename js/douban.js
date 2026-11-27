@@ -29,6 +29,13 @@ const doubanPageSize = 16; // 一次显示的项目数量
 
 // 初始化豆瓣功能
 function initDouban() {
+    // 一次性迁移：新版默认开启豆瓣热门推荐（老用户浏览器里可能存了 false）
+    // 用独立标记，只强制覆盖一次，之后尊重用户手动开关
+    if (!localStorage.getItem('doubanDefaultOnV2')) {
+        localStorage.setItem('doubanEnabled', 'true');
+        localStorage.setItem('doubanDefaultOnV2', '1');
+    }
+
     // 设置豆瓣开关的初始状态
     const doubanToggle = document.getElementById('doubanToggle');
     if (doubanToggle) {
