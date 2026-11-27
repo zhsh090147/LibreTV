@@ -248,6 +248,9 @@ export async function onRequest(context) {
 
     // 获取远程内容及其类型
     async function fetchContentWithType(targetUrl) {
+        // 判断目标是否为二进制内容（图片/音视频），二进制不能用 text() 读取，否则字节会被 UTF-8 重编码损坏
+        const isBinaryTarget = /\.(jpg|jpeg|png|gif|webp|bmp|svg|avif|heic|ico|mp4|mkv|avi|mov|webm|flv|ts|m4s|mp3|aac|m4a|flac|wav|ogg|opus)(\?|#|$)/i.test(targetUrl);
+
         const headers = new Headers({
             'User-Agent': getRandomUserAgent(),
             'Accept': '*/*',
@@ -256,6 +259,14 @@ export async function onRequest(context) {
             // 尝试设置 Referer 为目标网站的域名，或者传递原始 Referer
             'Referer': request.headers.get('Referer') || new URL(targetUrl).origin
         });
+
+        // 豆瓣系域名有严格防盗链：必须携带豆瓣站内 Referer，否则返回 418
+        try {
+            const targetHost = new URL(targetUrl).hostname;
+            if (targetHost.endsWith('doubanio.com') || targetHost.endsWith('douban.com')) {
+                headers.set('Referer', 'https://movie.douban.com/');
+            }
+        } catch (e) { /* URL 解析失败则跳过 */ }
 
         try {
             // 直接请求目标 URL
@@ -269,11 +280,19 @@ export async function onRequest(context) {
                  throw new Error(`HTTP error ${response.status}: ${response.statusText}. URL: ${targetUrl}. Body: ${errorBody.substring(0, 150)}`);
             }
 
+            const contentType = response.headers.get('Content-Type') || '';
+
+            // 二进制内容（图片/音视频）按 ArrayBuffer 读取，保持字节完整
+            if (isBinaryTarget || /^(image|video|audio)\/|application\/octet-stream/i.test(contentType)) {
+                const buf = await response.arrayBuffer();
+                logDebug(`请求成功(二进制): ${targetUrl}, Content-Type: ${contentType}, 字节数: ${buf.byteLength}`);
+                return { content: buf, contentType, isBinary: true, responseHeaders: response.headers };
+            }
+
             // 读取响应内容为文本
             const content = await response.text();
-            const contentType = response.headers.get('Content-Type') || '';
             logDebug(`请求成功: ${targetUrl}, Content-Type: ${contentType}, 内容长度: ${content.length}`);
-            return { content, contentType, responseHeaders: response.headers }; // 同时返回原始响应头
+            return { content, contentType, isBinary: false, responseHeaders: response.headers }; // 同时返回原始响应头
 
         } catch (error) {
              logDebug(`请求彻底失败: ${targetUrl}: ${error.message}`);
@@ -500,7 +519,8 @@ export async function onRequest(context) {
         logDebug(`收到代理请求: ${targetUrl}`);
 
         // --- 缓存检查 (KV) ---
-        const cacheKey = `proxy_raw:${targetUrl}`; // 使用原始内容的缓存键
+        // v2 键前缀：旧版代理曾把 text() 损坏的图片字节写入缓存，换前缀避开脏数据
+        const cacheKey = `proxy_raw_v2:${targetUrl}`; // 使用原始内容的缓存键
         let kvNamespace = null;
         try {
             kvNamespace = env.LIBRETV_PROXY_KV;
@@ -527,7 +547,11 @@ export async function onRequest(context) {
                         return createM3u8Response(processedM3u8);
                     } else {
                         logDebug(`从缓存返回非 M3U8 内容: ${targetUrl}`);
-                        return createResponse(content, 200, new Headers(headers));
+                        const cachedHeaders = new Headers(headers);
+                        cachedHeaders.delete('content-encoding');
+                        cachedHeaders.delete('content-length');
+                        cachedHeaders.delete('transfer-encoding');
+                        return createResponse(content, 200, cachedHeaders);
                     }
                 } else {
                      logDebug(`[缓存未命中] 原始内容: ${targetUrl}`);
@@ -539,10 +563,10 @@ export async function onRequest(context) {
         }
 
         // --- 实际请求 ---
-        const { content, contentType, responseHeaders } = await fetchContentWithType(targetUrl);
+        const { content, contentType, isBinary, responseHeaders } = await fetchContentWithType(targetUrl);
 
-        // --- 写入缓存 (KV) ---
-        if (kvNamespace) {
+        // --- 写入缓存 (KV，仅文本内容；二进制内容无法安全 JSON 序列化) ---
+        if (kvNamespace && !isBinary) {
              try {
                  const headersToCache = {};
                  responseHeaders.forEach((value, key) => { headersToCache[key.toLowerCase()] = value; });
@@ -565,6 +589,10 @@ export async function onRequest(context) {
             logDebug(`内容不是 M3U8 (类型: ${contentType})，直接返回: ${targetUrl}`);
             const finalHeaders = new Headers(responseHeaders);
             finalHeaders.set('Cache-Control', `public, max-age=${CACHE_TTL}`);
+            // 移除与实际字节不一致的头：fetch 已自动解压，长度也已改变
+            finalHeaders.delete('content-encoding');
+            finalHeaders.delete('content-length');
+            finalHeaders.delete('transfer-encoding');
             // 添加 CORS 头，确保非 M3U8 内容也能跨域访问（例如图片、字幕文件等）
             finalHeaders.set("Access-Control-Allow-Origin", "*");
             finalHeaders.set("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
