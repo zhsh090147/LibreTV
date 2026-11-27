@@ -806,16 +806,15 @@ async function search() {
         // 体育赛事过滤：过滤篮球、足球等体育直播赛事（暴风等源常混入）
         const sportsFilterEnabled = localStorage.getItem('sportsFilterEnabled') !== 'false';
         if (sportsFilterEnabled) {
-            const sportsKeywords = ['篮球', '足球', 'NBA', 'CBA', '中超', '英超', '西甲', '意甲', '德甲', '欧冠', '世界杯', '体育', '网球', '羽毛球', '乒乓球', '排球', '赛车', 'F1', '拳击', '格斗', 'UFC', 'WWE', '赛事', '常规赛', '季后赛', '总决赛', '小组赛', '联赛'];
+            const sportsKeywords = ['篮球', '足球', 'NBA', 'CBA', '中超', '英超', '西甲', '意甲', '德甲', '欧冠', '世界杯', '体育', '网球', '羽毛球', '乒乓球', '排球', '赛车', 'F1', '拳击', '格斗', 'UFC', 'WWE', '斯诺克', '台球', '赛事', '常规赛', '季后赛', '总决赛', '小组赛', '联赛', '大师赛', '资格赛', '世锦赛', '公开赛', '邀请赛', '锦标赛'];
             allResults = allResults.filter(item => {
                 const typeName = (item.type_name || '').toString();
                 const vodName = (item.vod_name || '').toString();
-                const text = typeName + ' ' + vodName;
-                // 仅当分类明确是体育类，或片名以赛事模式开头时才过滤，避免误伤影视剧
+                // 仅当分类明确是体育类，或片名符合赛事模式时才过滤，避免误伤影视剧
                 const isSportsType = sportsKeywords.some(k => typeName.includes(k));
-                const isSportsTitle = /^(NBA|CBA|英超|中超|西甲|意甲|德甲|欧冠|世界杯|中国男篮|男篮|女篮)/i.test(vodName) ||
-                    /(常规赛|季后赛|总决赛|小组赛|俱乐部杯)[:：]/.test(vodName) ||
-                    /[：:][^：:]*\b(VS|vs|对阵)\b/i.test(vodName);
+                const isSportsTitle = /^(NBA|CBA|英超|中超|西甲|意甲|德甲|欧冠|世界杯|中国男篮|男篮|女篮|斯诺克|台球)/i.test(vodName) ||
+                    /(常规赛|季后赛|总决赛|小组赛|俱乐部杯|大师赛|资格赛|世锦赛|公开赛|邀请赛|锦标赛)[:：]?/.test(vodName) ||
+                    (/(VS|vs|对阵)/i.test(vodName) && /(赛|杯|联赛|大师|资格|锦标)/.test(vodName));
                 if (isSportsType) return false;
                 if (isSportsTitle) return false;
                 return true;
