@@ -1,5 +1,7 @@
 // 全局变量
-let selectedAPIs = JSON.parse(localStorage.getItem('selectedAPIs') || '["tyyszy","xiaomaomi","dyttzy", "bfzy", "ruyi"]'); // 默认选中天涯资源、暴风资源和如意资源
+// 默认选中实测可用的源（旧默认源 tyyszy/xiaomaomi/dyttzy/ruyi 多数已失效）
+const DEFAULT_APIS = ["bfzy","ffzyapi","mdzyapi","zuidapi","apibdzy","hongniu","iqiyizy","maoyan","zy360zz","moduapi","ukuapi","ffzy"];
+let selectedAPIs = JSON.parse(localStorage.getItem('selectedAPIs') || JSON.stringify(DEFAULT_APIS));
 let customAPIs = JSON.parse(localStorage.getItem('customAPIs') || '[]'); // 存储自定义API列表
 
 // 添加当前播放的集数索引
@@ -25,11 +27,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // 渲染搜索历史
     renderSearchHistory();
     
-    // 设置默认API选择（如果是第一次加载）
-    if (!localStorage.getItem('hasInitializedDefaults')) {
-        // 仅选择天涯资源、暴风资源和如意资源
-        selectedAPIs = ["tyyszy","xiaomaomi", "bfzy","dyttzy", "ruyi"];
+    // 旧版失效默认源迁移：若仍是旧的失效默认组合，升级为实测可用源
+    const OLD_DEFAULT = ["tyyszy","xiaomaomi","bfzy","dyttzy","ruyi"];
+    const cur = JSON.parse(localStorage.getItem('selectedAPIs') || '[]');
+    const isOldDefault = cur.length === OLD_DEFAULT.length && OLD_DEFAULT.every(x => cur.includes(x));
+    if (!localStorage.getItem('hasInitializedDefaults') || isOldDefault || !localStorage.getItem('selectedApisV2')) {
+        selectedAPIs = [...DEFAULT_APIS];
         localStorage.setItem('selectedAPIs', JSON.stringify(selectedAPIs));
+        localStorage.setItem('selectedApisV2', 'true');
         
         // 默认选中过滤开关
         localStorage.setItem('yellowFilterEnabled', 'true');
@@ -626,9 +631,13 @@ async function search() {
                 
                 // 添加超时处理
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 8000);
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
                 
-                const response = await fetch(PROXY_URL + encodeURIComponent(apiUrl), {
+                // 添加鉴权参数到代理URL
+                const proxiedUrl = window.ProxyAuth?.addAuthToProxyUrl ?
+                    await window.ProxyAuth.addAuthToProxyUrl(PROXY_URL + encodeURIComponent(apiUrl)) :
+                    PROXY_URL + encodeURIComponent(apiUrl);
+                const response = await fetch(proxiedUrl, {
                     headers: API_CONFIG.search.headers,
                     signal: controller.signal
                 });
@@ -672,9 +681,12 @@ async function search() {
                         const pagePromise = (async () => {
                             try {
                                 const pageController = new AbortController();
-                                const pageTimeoutId = setTimeout(() => pageController.abort(), 8000);
+                                const pageTimeoutId = setTimeout(() => pageController.abort(), 15000);
                                 
-                                const pageResponse = await fetch(PROXY_URL + encodeURIComponent(pageUrl), {
+                                const proxiedPageUrl = window.ProxyAuth?.addAuthToProxyUrl ?
+                                    await window.ProxyAuth.addAuthToProxyUrl(PROXY_URL + encodeURIComponent(pageUrl)) :
+                                    PROXY_URL + encodeURIComponent(pageUrl);
+                                const pageResponse = await fetch(proxiedPageUrl, {
                                     headers: API_CONFIG.search.headers,
                                     signal: pageController.signal
                                 });

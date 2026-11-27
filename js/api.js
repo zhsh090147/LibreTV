@@ -577,6 +577,16 @@ async function handleMultipleCustomSearch(searchQuery, customApiUrls) {
             }
         }
         
+        // 对代理请求自动补充鉴权参数（幂等：已有 auth 则不重复添加）
+        // 保证搜索、详情、播放等所有 /proxy/ 请求都带上密码鉴权
+        if (requestUrl.pathname.startsWith('/proxy/') && !requestUrl.searchParams.has('auth')) {
+            const rawUrl = typeof input === 'string' ? input : input.url;
+            const authedUrl = window.ProxyAuth?.addAuthToProxyUrl
+                ? await window.ProxyAuth.addAuthToProxyUrl(rawUrl)
+                : rawUrl;
+            return originalFetch.call(this, authedUrl, init);
+        }
+
         // 非API请求使用原始fetch
         return originalFetch.apply(this, arguments);
     };
